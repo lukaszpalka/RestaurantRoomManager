@@ -1,6 +1,6 @@
 package com.example.restaurantroommanager.table;
 
-import com.example.restaurantroommanager.exceptions.NotPositiveNumberException;
+import com.example.restaurantroommanager.exceptions.InvalidArgumentException;
 import com.example.restaurantroommanager.exceptions.RestaurantTableNotFoundException;
 import com.example.restaurantroommanager.exceptions.WrongTableStateException;
 import com.example.restaurantroommanager.product.Product;
@@ -9,7 +9,6 @@ import com.example.restaurantroommanager.product.ProductService;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class RestaurantTableService {
@@ -77,9 +76,10 @@ public class RestaurantTableService {
 
     /* ------------------------------------------- PRODUCT ON TABLE CRUD ------------------------------------------ */
     public void addProductToTable(Long id, ProductOnTableDto productOnTableDto) {
-        if (productOnTableDto.amount() < 1) {
-            throw new NotPositiveNumberException("Amount must be greater than 0");
+        if (productOnTableDto.amount() <= 0) {
+            throw new InvalidArgumentException("Amount must be greater than 0");
         }
+
         RestaurantTable restaurantTable = getRestaurantTableById(id);
         Product product = new ProductService(productRepository).getProductById(productOnTableDto.id());
 
@@ -91,15 +91,10 @@ public class RestaurantTableService {
             restaurantTable.getProductsOnTable().stream()
                     .filter(productOnTable -> productOnTable.getId().equals(product.getId()))
                     .findFirst()
-                    .ifPresentOrElse(productOnTable -> {
-                                productOnTable.setAmount(productOnTable.getAmount() + productOnTableDto.amount());
-                                productOnTable.setPrice(productOnTable.getPrice() + product.getPrice() * productOnTableDto.amount());
-                            },
+                    .ifPresentOrElse(productOnTable -> updateProductOnTableAmount(productOnTable, productOnTableDto),
                             () -> addNewProductOnTable(restaurantTable, productOnTableDto.amount(), product));
             restaurantTableRepository.save(restaurantTable);
-        } else {
-            throw new WrongTableStateException("Adding products to table with id=" + id + " not allowed");
-        }
+        } else throw new WrongTableStateException("Adding products to table with id=" + id + " not allowed");
     }
 
     public List<ProductOnTable> getAllProductsOnTableByTableId(Long id) {
@@ -113,29 +108,57 @@ public class RestaurantTableService {
                 product.getPrice() * amount, amount));
     }
 
-    private void updateProductOnTableAmount(ProductOnTable productOnTable, ProductOnTableDto productOnTableDto, Product product) {
-        //jezeli amount jest dodatnie to sprawdzic roznice tableamount - amount >
-        //jezeli roznica
-
+    private void updateProductOnTableAmount(ProductOnTable productOnTable, ProductOnTableDto productOnTableDto) {
         productOnTable.setAmount(productOnTable.getAmount() + productOnTableDto.amount());
-        productOnTable.setPrice(productOnTable.getPrice() + product.getPrice() * productOnTableDto.amount());
+        productOnTable.setPrice(productOnTable.getPrice() * (1 + productOnTableDto.amount()));
     }
 
     public void updateProductOnTableByTableId(Long tableId, ProductOnTableDto productOnTableDto) {
         RestaurantTable restaurantTable = getRestaurantTableById(tableId);
 
-        restaurantTable.getProductsOnTable().stream()
-                .filter(productOnTable -> productOnTable.getId().equals(productOnTableDto.id()) && productOnTableDto.amount() != null)
-                .findFirst()
-                .ifPresent(productOnTable -> {
-                    productOnTable.setAmount(productOnTableDto.amount());
-                    restaurantTableRepository.save(restaurantTable);
-                });
+        if (isOccupiedWithProducts(restaurantTable)) {
+            restaurantTable.getProductsOnTable().stream()
+                    .filter(productOnTable -> productOnTable.getId().equals(productOnTableDto.id()) && productOnTableDto.amount() != null)
+                    .findFirst()
+                    .ifPresent(productOnTable -> {
+                        productOnTable.setAmount(productOnTableDto.amount());
+                        restaurantTableRepository.save(restaurantTable);
+                    });
+        } else throw new WrongTableStateException("Operation not permitted for table with id=" + tableId);
     }
-
 
     public void deleteProductByIdFromTableById(Long tableId, Long productId) {
         RestaurantTable restaurantTable = getRestaurantTableById(tableId);
+
+        if (isOccupiedWithProducts(restaurantTable)) {
+            deleteWholeProduct(restaurantTable, productId);
+        } else throw new WrongTableStateException("Operation not permitted for table with id=" + tableId);
+    }
+
+    public void deletePartiallyProductFromTableByTableId(Long tableId, ProductOnTableDto productOnTableDto) {
+        RestaurantTable restaurantTable = getRestaurantTableById(tableId);
+        if (!isOccupiedWithProducts(restaurantTable)) {
+            throw new WrongTableStateException("Operation not permitted for table with id=" + tableId);
+        }
+
+        if (productOnTableDto.amount() <= 0)
+            throw new InvalidArgumentException("Amount must be greater than 0");
+
+        restaurantTable.getProductsOnTable().stream()
+                .filter(productOnTable -> productOnTable.getId().equals(productOnTableDto.id()))
+                .findFirst()
+                .ifPresent(productOnTable -> {
+                    if (productOnTableDto.amount() >= productOnTable.getAmount()) {
+                        deleteWholeProduct(restaurantTable, productOnTable.getId());
+                    } else {
+                        productOnTable.setAmount(productOnTable.getAmount() - productOnTableDto.amount());
+                        productOnTable.setPrice(productOnTable.getPrice() * (1 - productOnTableDto.amount()));
+                        restaurantTableRepository.save(restaurantTable);
+                    }
+                });
+    }
+
+    private void deleteWholeProduct(RestaurantTable restaurantTable, Long productId) {
         restaurantTable.getProductsOnTable().removeIf(productOnTable -> productOnTable.getId().equals(productId));
         restaurantTableRepository.save(restaurantTable);
     }
@@ -145,7 +168,7 @@ public class RestaurantTableService {
         RestaurantTable restaurantTable = getRestaurantTableById(id);
 
         if (isFree(restaurantTable) && isEnoughSpace(restaurantTable, amount)) {
-            restaurantTable.setTableOccupancy(restaurantTable.getTableOccupancy() + amount);
+            restaurantTable.setTableOccupancy(amount);
             restaurantTable.setRestaurantTableState(RestaurantTableState.OCCUPIED);
             restaurantTableRepository.save(restaurantTable);
         } else throw new WrongTableStateException("Designated table is not free or there is not enough space at it");
@@ -153,27 +176,35 @@ public class RestaurantTableService {
 
     public void addMorePeopleToTable(Long id, Integer amount) {
         RestaurantTable restaurantTable = getRestaurantTableById(id);
-        boolean isOccupied = restaurantTable.getRestaurantTableState().equals(RestaurantTableState.OCCUPIED)
-                || restaurantTable.getRestaurantTableState().equals(RestaurantTableState.OCCUPIED_WITH_PRODUCTS);
-        boolean isEnoughSpace = restaurantTable.getTableCapacity() - restaurantTable.getTableOccupancy() >= amount;
-        if (isOccupied && isEnoughSpace) {
+
+        if ((isOccupied(restaurantTable) || isOccupiedWithProducts(restaurantTable)) && isEnoughSpace(restaurantTable, amount)) {
             restaurantTable.setTableOccupancy(restaurantTable.getTableOccupancy() + amount);
-            restaurantTable.setRestaurantTableState(RestaurantTableState.OCCUPIED);
             restaurantTableRepository.save(restaurantTable);
-        } else throw new WrongTableStateException("Designated table is not free or there is not enough space at it");
+        } else throw new WrongTableStateException("Not enough space on designated table");
     }
 
-    public void payTheRestaurantTable() {
-        //sprawdź czy jest z produktami
-        //zapłać i wywal produkty
-        //zmień status na paid
+    public void payTheRestaurantTable(Long id) {
+        RestaurantTable restaurantTable = getRestaurantTableById(id);
+
+        if (!isOccupiedWithProducts(restaurantTable)) {
+            throw new WrongTableStateException("Operation not permitted for table with id=" + id);
+        }
+
+        restaurantTable.getProductsOnTable().clear();
+        restaurantTable.setRestaurantTableState(RestaurantTableState.PAID);
+        restaurantTableRepository.save(restaurantTable);
     }
 
-    public void closeTheRestaurantTable() {
-        //sprawdź czy zapłacony
-        //wywal ludzi ustaw occupancy na 0
-        //wywal liste produktow (clear?)
-        //zmień status na free
+    public void closeTheRestaurantTable(Long id) {
+        RestaurantTable restaurantTable = getRestaurantTableById(id);
+
+        if (!isPaidAlready(restaurantTable)) {
+            throw new WrongTableStateException("Operation not permitted for table with id=" + id);
+        }
+
+        restaurantTable.setTableOccupancy(0);
+        restaurantTable.setRestaurantTableState(RestaurantTableState.FREE);
+        restaurantTableRepository.save(restaurantTable);
     }
 
 

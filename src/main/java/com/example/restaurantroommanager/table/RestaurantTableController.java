@@ -34,7 +34,7 @@ public class RestaurantTableController {
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity updateRestaurantTableById(@PathVariable("id") Long id, @RequestBody RestaurantTableDto restaurantTableDto)  {
+    public ResponseEntity updateRestaurantTableById(@PathVariable("id") Long id, @RequestBody RestaurantTableDto restaurantTableDto) {
         restaurantTableService.updateRestaurantTableById(id, restaurantTableDto);
         return new ResponseEntity(HttpStatus.OK);
     }
@@ -65,12 +65,43 @@ public class RestaurantTableController {
     }
 
 
-    //TODO: usuwanie częściowe
-
     @DeleteMapping("/{tableId}/product/{productId}")
     public ResponseEntity deleteProductByIdFromTableById(@PathVariable("tableId") Long tableId, @PathVariable("productId") Long productId) {
         restaurantTableService.deleteProductByIdFromTableById(tableId, productId);
         return new ResponseEntity(HttpStatus.NO_CONTENT);
+    }
+
+    @DeleteMapping("/{tableId}/product")
+    public ResponseEntity deletePartiallyProductFromTableByTableId(@PathVariable("tableId") Long tableId, ProductOnTableDto productOnTableDto) {
+        restaurantTableService.deletePartiallyProductFromTableByTableId(tableId, productOnTableDto);
+        return new ResponseEntity(HttpStatus.NO_CONTENT);
+    }
+
+
+    /* --------------------- STATE CHANGE ---------------------- */
+
+    @PatchMapping("/{tableId}/open/{amount}")
+    public ResponseEntity openRestaurantTable(@PathVariable("tableId") Long tableId, @PathVariable("amount") Integer amount) {
+        restaurantTableService.openRestaurantTable(tableId, amount);
+        return new ResponseEntity(HttpStatus.OK);
+    }
+
+    @PatchMapping("/{tableId}/add/{amount}")
+    public ResponseEntity addMorePeopleToRestaurantTable(@PathVariable("tableId") Long tableId, @PathVariable("amount") Integer amount) {
+        restaurantTableService.addMorePeopleToTable(tableId, amount);
+        return new ResponseEntity(HttpStatus.OK);
+    }
+
+    @PatchMapping("/{tableId}/pay")
+    public ResponseEntity payTheRestaurantTable(@PathVariable("tableId") Long tableId) {
+        restaurantTableService.payTheRestaurantTable(tableId);
+        return new ResponseEntity(HttpStatus.OK);
+    }
+
+    @PatchMapping("/{tableId}/close")
+    public ResponseEntity closeTheRestaurantTable(@PathVariable("tableId") Long tableId) {
+        restaurantTableService.closeTheRestaurantTable(tableId);
+        return new ResponseEntity(HttpStatus.OK);
     }
 
 
