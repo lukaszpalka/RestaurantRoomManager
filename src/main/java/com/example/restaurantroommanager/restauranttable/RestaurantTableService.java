@@ -1,4 +1,4 @@
-package com.example.restaurantroommanager.table;
+package com.example.restaurantroommanager.restauranttable;
 
 import com.example.restaurantroommanager.exceptions.InvalidArgumentException;
 import com.example.restaurantroommanager.exceptions.RestaurantTableNotFoundException;
@@ -122,6 +122,7 @@ public class RestaurantTableService {
                     .findFirst()
                     .ifPresent(productOnTable -> {
                         productOnTable.setAmount(productOnTableDto.amount());
+                        productOnTable.setPrice(productOnTable.getPrice() * (1 + productOnTableDto.amount()));
                         restaurantTableRepository.save(restaurantTable);
                     });
         } else throw new WrongTableStateException("Operation not permitted for table with id=" + tableId);
@@ -136,13 +137,14 @@ public class RestaurantTableService {
     }
 
     public void deletePartiallyProductFromTableByTableId(Long tableId, ProductOnTableDto productOnTableDto) {
+        if (productOnTableDto.amount() <= 0) {
+            throw new InvalidArgumentException("Amount must be greater than 0");
+        }
+
         RestaurantTable restaurantTable = getRestaurantTableById(tableId);
         if (!isOccupiedWithProducts(restaurantTable)) {
             throw new WrongTableStateException("Operation not permitted for table with id=" + tableId);
         }
-
-        if (productOnTableDto.amount() <= 0)
-            throw new InvalidArgumentException("Amount must be greater than 0");
 
         restaurantTable.getProductsOnTable().stream()
                 .filter(productOnTable -> productOnTable.getId().equals(productOnTableDto.id()))
@@ -183,15 +185,15 @@ public class RestaurantTableService {
         } else throw new WrongTableStateException("Not enough space on designated table");
     }
 
-    public void payTheRestaurantTable(Long id) {
+    public void payRestaurantTable(Long id) {
         RestaurantTable restaurantTable = getRestaurantTableById(id);
 
         if (!isOccupiedWithProducts(restaurantTable)) {
             throw new WrongTableStateException("Operation not permitted for table with id=" + id);
         }
 
-        restaurantTable.getProductsOnTable().clear();
         restaurantTable.setRestaurantTableState(RestaurantTableState.PAID);
+        restaurantTable.getProductsOnTable().clear();
         restaurantTableRepository.save(restaurantTable);
     }
 
@@ -202,8 +204,8 @@ public class RestaurantTableService {
             throw new WrongTableStateException("Operation not permitted for table with id=" + id);
         }
 
-        restaurantTable.setTableOccupancy(0);
         restaurantTable.setRestaurantTableState(RestaurantTableState.FREE);
+        restaurantTable.setTableOccupancy(0);
         restaurantTableRepository.save(restaurantTable);
     }
 

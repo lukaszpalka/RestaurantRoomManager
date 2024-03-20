@@ -1,4 +1,4 @@
-package com.example.restaurantroommanager.table;
+package com.example.restaurantroommanager.restauranttable;
 
 import jakarta.persistence.*;
 import lombok.Data;

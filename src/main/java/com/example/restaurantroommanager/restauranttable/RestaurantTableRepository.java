@@ -1,4 +1,4 @@
-package com.example.restaurantroommanager.table;
+package com.example.restaurantroommanager.restauranttable;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

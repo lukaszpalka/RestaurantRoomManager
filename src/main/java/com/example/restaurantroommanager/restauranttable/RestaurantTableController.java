@@ -1,4 +1,4 @@
-package com.example.restaurantroommanager.table;
+package com.example.restaurantroommanager.restauranttable;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -71,8 +71,8 @@ public class RestaurantTableController {
         return new ResponseEntity(HttpStatus.NO_CONTENT);
     }
 
-    @DeleteMapping("/{tableId}/product")
-    public ResponseEntity deletePartiallyProductFromTableByTableId(@PathVariable("tableId") Long tableId, ProductOnTableDto productOnTableDto) {
+    @DeleteMapping("/{tableId}/product/{productId}")
+    public ResponseEntity deletePartiallyProductFromTableByTableId(@PathVariable("tableId") Long tableId, @RequestBody ProductOnTableDto productOnTableDto) {
         restaurantTableService.deletePartiallyProductFromTableByTableId(tableId, productOnTableDto);
         return new ResponseEntity(HttpStatus.NO_CONTENT);
     }
@@ -94,7 +94,7 @@ public class RestaurantTableController {
 
     @PatchMapping("/{tableId}/pay")
     public ResponseEntity payTheRestaurantTable(@PathVariable("tableId") Long tableId) {
-        restaurantTableService.payTheRestaurantTable(tableId);
+        restaurantTableService.payRestaurantTable(tableId);
         return new ResponseEntity(HttpStatus.OK);
     }
 
